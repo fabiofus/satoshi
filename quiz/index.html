@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulatore Quiz Esame</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1d2330; --muted: #6b7280; --border: #dfe3ea;
+    --accent: #2563eb; --accent-text: #fff; --ok: #15803d; --ok-bg: #dcfce7; --ko: #b91c1c; --ko-bg: #fee2e2;
+    --sel-bg: #dbeafe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1c212b; --text: #e7eaf0; --muted: #9aa3b2; --border: #2e3542;
+      --accent: #4f8cff; --accent-text: #fff; --ok: #4ade80; --ok-bg: #12351f; --ko: #f87171; --ko-bg: #3d1717;
+      --sel-bg: #1e3358;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.4rem; margin: 8px 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 12px 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .grow { flex: 1; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  label { display: block; margin: 8px 0; }
+  input[type=number], input[type=search] { font: inherit; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+  input[type=number] { width: 90px; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .mode { text-align: left; padding: 14px; }
+  .mode b { display: block; margin-bottom: 4px; }
+  .mode.active { border-color: var(--accent); background: var(--sel-bg); }
+  .sections { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sections label { margin: 0; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: .9rem; cursor: pointer; }
+  .q-id { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--muted); }
+  .q-text { font-size: 1.1rem; font-weight: 600; margin: 6px 0 14px; }
+  .opt { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px 14px; line-height: 1.4; }
+  .opt.sel { border-color: var(--accent); background: var(--sel-bg); }
+  .opt.ok { border-color: var(--ok); background: var(--ok-bg); }
+  .opt.ko { border-color: var(--ko); background: var(--ko-bg); }
+  .bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .timer.low { color: var(--ko); }
+  .grid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  .grid button { width: 38px; padding: 6px 0; font-size: .8rem; }
+  .grid button.done { background: var(--sel-bg); }
+  .grid button.cur { outline: 2px solid var(--accent); }
+  .grid button.ok { background: var(--ok-bg); border-color: var(--ok); }
+  .grid button.ko { background: var(--ko-bg); border-color: var(--ko); }
+  .score { font-size: 2.2rem; font-weight: 800; }
+  .pass { color: var(--ok); } .fail { color: var(--ko); }
+  .rev { border-top: 1px solid var(--border); padding: 12px 0; }
+  .rev .a { margin: 2px 0; font-size: .95rem; }
+  .rev .a.ok { color: var(--ok); } .rev .a.ko { color: var(--ko); text-decoration: line-through; }
+  .hidden { display: none !important; }
+  @media (max-width: 480px) { .row > button { flex: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <!-- HOME -->
+  <section id="home">
+    <h1>Simulatore Quiz Esame</h1>
+    <div class="muted" id="totInfo"></div>
+
+    <div class="card">
+      <h2>Modalità</h2>
+      <div class="modes">
+        <button class="mode" data-mode="esame"><b>Simulazione esame</b><span class="muted">Domande casuali, timer, correzione alla fine</span></button>
+        <button class="mode" data-mode="allenamento"><b>Allenamento</b><span class="muted">Vedi subito se la risposta è giusta</span></button>
+        <button class="mode" data-mode="errori"><b>Ripasso errori</b><span class="muted" id="erroriInfo"></span></button>
+        <button class="mode" data-mode="sfoglia"><b>Sfoglia / cerca</b><span class="muted">Tutte le domande con la risposta corretta</span></button>
+      </div>
+    </div>
+
+    <div class="card" id="opts">
+      <h2>Impostazioni</h2>
+      <div class="row"><label class="grow">Numero di domande</label><input type="number" id="nDom" min="1" value="30"></div>
+      <div class="row" id="rowTempo"><label class="grow">Tempo (minuti, 0 = nessun limite)</label><input type="number" id="tempo" min="0" value="30"></div>
+      <div class="row" id="rowSoglia"><label class="grow">Errori massimi per superare</label><input type="number" id="soglia" min="0" value="3"></div>
+      <label><input type="checkbox" id="mescola" checked> Mescola l'ordine delle risposte</label>
+      <div style="margin-top:12px">
+        <div class="row"><span class="grow">Sezioni incluse</span>
+          <button id="selAll" type="button">Tutte</button><button id="selNone" type="button">Nessuna</button></div>
+        <div class="sections" id="sections" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="row"><button class="primary grow" id="start">Inizia</button></div>
+    <p class="muted" style="margin-top:16px">Statistiche ed errori sono salvati solo su questo dispositivo/browser.
+      <button id="reset" type="button" style="padding:4px 10px;font-size:.85rem">Azzera dati</button></p>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz" class="hidden">
+    <div class="row">
+      <span class="grow" id="progress"></span>
+      <span class="timer" id="timer"></span>
+    </div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="card">
+      <div class="q-id" id="qId"></div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div id="feedback" class="muted"></div>
+    </div>
+    <div class="row">
+      <button id="prev">← Indietro</button>
+      <button id="next" class="grow primary">Avanti →</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="abbandona">Esci</button>
+      <span class="grow"></span>
+      <button id="consegna">Consegna</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- RISULTATI -->
+  <section id="results" class="hidden">
+    <div class="card" style="text-align:center">
+      <div class="score" id="score"></div>
+      <div id="esito"></div>
+      <div class="muted" id="scoreInfo"></div>
+    </div>
+    <div class="row">
+      <button class="primary grow" id="again">Nuova prova</button>
+      <button id="home2">Home</button>
+    </div>
+    <div class="card">
+      <div class="row"><h2 class="grow" style="margin:0">Correzione</h2>
+        <label style="margin:0"><input type="checkbox" id="soloErr" checked> Solo errori</label></div>
+      <div id="review"></div>
+    </div>
+  </section>
+
+  <!-- SFOGLIA -->
+  <section id="browse" class="hidden">
+    <div class="row" style="margin:8px 0">
+      <button id="home3">← Home</button>
+      <input type="search" class="grow" id="search" placeholder="Cerca testo o codice (es. UB0012)…" style="width:auto">
+    </div>
+    <div class="muted" id="browseInfo"></div>
+    <div class="card" id="browseList"></div>
+  </section>
+</main>
+
+<script src="domande.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.DOMANDE || [];
+  var byId = {};
+  D.forEach(function (q) { byId[q.id] = q; });
+  var LS = 'quizEsame.v1';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- persistenza locale ----------
+  function load() {
+    try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch (e) { return {}; }
+  }
+  function save() { try { localStorage.setItem(LS, JSON.stringify(store)); } catch (e) {} }
+  var store = load();
+  store.err = store.err || {};          // id -> numero di errori "aperti"
+  store.settings = store.settings || {};
+
+  // ---------- utilità ----------
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function show(id) { ['home', 'quiz', 'results', 'browse'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); }); window.scrollTo(0, 0); }
+  function sec(q) { return q.id.slice(0, 2); }
+
+  // ---------- home ----------
+  var mode = store.settings.mode || 'esame';
+  var sections = {};
+  D.forEach(function (q) { sections[sec(q)] = (sections[sec(q)] || 0) + 1; });
+  var secKeys = Object.keys(sections).sort();
+  var selSec = store.settings.sec || secKeys.slice();
+
+  function renderSections() {
+    $('sections').innerHTML = secKeys.map(function (k) {
+      return '<label><input type="checkbox" value="' + k + '"' + (selSec.indexOf(k) >= 0 ? ' checked' : '') + '> ' + k + ' <span class="muted">(' + sections[k] + ')</span></label>';
+    }).join('');
+  }
+  $('sections').addEventListener('change', function () {
+    selSec = [].slice.call($('sections').querySelectorAll('input:checked')).map(function (i) { return i.value; });
+  });
+  $('selAll').onclick = function () { selSec = secKeys.slice(); renderSections(); };
+  $('selNone').onclick = function () { selSec = []; renderSections(); };
+
+  function errIds() { return Object.keys(store.err).filter(function (id) { return byId[id] && store.err[id] > 0; }); }
+
+  function renderHome() {
+    $('totInfo').textContent = D.length + ' domande a risposta multipla disponibili';
+    var ne = errIds().length;
+    $('erroriInfo').textContent = ne ? ne + ' domande sbagliate da ripassare' : 'Nessun errore salvato';
+    [].forEach.call(document.querySelectorAll('.mode'), function (b) { b.classList.toggle('active', b.dataset.mode === mode); });
+    $('opts').classList.toggle('hidden', mode === 'sfoglia');
+    $('rowTempo').classList.toggle('hidden', mode !== 'esame');
+    $('rowSoglia').classList.toggle('hidden', mode !== 'esame');
+    $('start').textContent = mode === 'sfoglia' ? 'Apri elenco' : 'Inizia';
+    $('start').disabled = mode === 'errori' && !ne;
+  }
+  [].forEach.call(document.querySelectorAll('.mode'), function (b) {
+    b.onclick = function () { mode = b.dataset.mode; renderHome(); };
+  });
+  var st = store.settings;
+  if (st.nDom) $('nDom').value = st.nDom;
+  if (st.tempo != null) $('tempo').value = st.tempo;
+  if (st.soglia != null) $('soglia').value = st.soglia;
+  if (st.mescola != null) $('mescola').checked = st.mescola;
+
+  $('reset').onclick = function () {
+    if (confirm('Cancellare errori salvati e impostazioni su questo dispositivo?')) { store = { err: {}, settings: {} }; save(); renderHome(); }
+  };
+
+  // ---------- quiz ----------
+  var S = null; // stato sessione
+  var tick = null;
+
+  $('start').onclick = function () {
+    store.settings = {
+      mode: mode, sec: selSec, nDom: +$('nDom').value || 30, tempo: Math.max(0, +$('tempo').value || 0),
+      soglia: Math.max(0, +$('soglia').value || 0), mescola: $('mescola').checked
+    };
+    save();
+    if (mode === 'sfoglia') return openBrowse();
+    startQuiz();
+  };
+
+  function startQuiz() {
+    var cfg = store.settings;
+    var pool = mode === 'errori'
+      ? errIds().map(function (id) { return byId[id]; })
+      : D.filter(function (q) { return selSec.indexOf(sec(q)) >= 0; });
+    if (mode === 'errori') pool = pool.filter(function (q) { return selSec.indexOf(sec(q)) >= 0; });
+    if (!pool.length) { alert('Nessuna domanda disponibile con le sezioni selezionate.'); return; }
+    var qs = shuffle(pool.slice()).slice(0, Math.min(cfg.nDom, pool.length));
+    S = {
+      mode: mode,
+      items: qs.map(function (q) {
+        var order = [0, 1, 2].slice(0, q.o.length);
+        if (cfg.mescola) shuffle(order);
+        return { q: q, order: order, ans: null };
+      }),
+      i: 0,
+      end: mode === 'esame' && cfg.tempo > 0 ? Date.now() + cfg.tempo * 60000 : 0,
+      soglia: cfg.soglia
+    };
+    $('consegna').textContent = mode === 'esame' ? 'Consegna' : 'Termina';
+    show('quiz');
+    renderQ();
+    clearInterval(tick);
+    if (S.end) { tick = setInterval(updTimer, 500); }
+    updTimer();
+  }
+
+  function updTimer() {
+    if (!S || !S.end) { $('timer').textContent = ''; return; }
+    var left = Math.max(0, Math.round((S.end - Date.now()) / 1000));
+    $('timer').textContent = '⏱ ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2);
+    $('timer').classList.toggle('low', left < 60);
+    if (left <= 0) { clearInterval(tick); alert('Tempo scaduto!'); finish(); }
+  }
+
+  var immediate = function () { return S.mode !== 'esame'; };
+
+  function renderQ() {
+    var it = S.items[S.i], q = it.q, n = S.items.length;
+    var answered = S.items.filter(function (x) { return x.ans !== null; }).length;
+    $('progress').textContent = 'Domanda ' + (S.i + 1) + ' di ' + n + ' · risposte date: ' + answered;
+    $('barFill').style.width = (answered / n * 100) + '%';
+    $('qId').textContent = q.id;
+    $('qText').textContent = q.q;
+    var reveal = immediate() && it.ans !== null;
+    $('qOpts').innerHTML = it.order.map(function (oi, k) {
+      var cls = 'opt';
+      if (reveal) { if (oi === q.c) cls += ' ok'; else if (oi === it.ans) cls += ' ko'; }
+      else if (oi === it.ans) cls += ' sel';
+      return '<button class="' + cls + '" data-oi="' + oi + '"' + (reveal ? ' disabled style="opacity:1"' : '') + '><b>' + 'ABC'[k] + '.</b> ' + esc(q.o[oi]) + '</button>';
+    }).join('');
+    $('feedback').textContent = reveal ? (it.ans === q.c ? '✔ Corretto' : '✘ Sbagliato') : '';
+    $('feedback').style.color = reveal ? (it.ans === q.c ? 'var(--ok)' : 'var(--ko)') : '';
+    $('prev').disabled = S.i === 0;
+    $('next').textContent = S.i === n - 1 ? (S.mode === 'esame' ? 'Consegna' : 'Termina') : 'Avanti →';
+    $('grid').innerHTML = S.items.map(function (x, k) {
+      var c = '';
+      if (x.ans !== null) c = immediate() ? (x.ans === x.q.c ? 'ok' : 'ko') : 'done';
+      if (k === S.i) c += ' cur';
+      return '<button class="' + c + '" data-k="' + k + '">' + (k + 1) + '</button>';
+    }).join('');
+  }
+
+  $('qOpts').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-oi]');
+    if (!b || b.disabled) return;
+    var it = S.items[S.i];
+    it.ans = +b.dataset.oi;
+    if (immediate()) recordAnswer(it);
+    renderQ();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ($('quiz').classList.contains('hidden') || e.target.tagName === 'INPUT') return;
+    var k = { '1': 0, '2': 1, '3': 2, a: 0, b: 1, c: 2 }[e.key.toLowerCase()];
+    if (k != null) { var b = $('qOpts').querySelectorAll('button')[k]; if (b) b.click(); }
+    else if (e.key === 'ArrowRight' || e.key === 'Enter') $('next').click();
+    else if (e.key === 'ArrowLeft') $('prev').click();
+  });
+  $('grid').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-k]'); if (!b) return;
+    S.i = +b.dataset.k; renderQ();
+  });
+  $('prev').onclick = function () { if (S.i > 0) { S.i--; renderQ(); } };
+  $('next').onclick = function () {
+    if (S.i < S.items.length - 1) { S.i++; renderQ(); } else askFinish();
+  };
+  $('consegna').onclick = askFinish;
+  $('abbandona').onclick = function () {
+    if (confirm('Uscire senza correggere? Le risposte di questa prova andranno perse.')) { clearInterval(tick); S = null; renderHome(); show('home'); }
+  };
+
+  function askFinish() {
+    var miss = S.items.filter(function (x) { return x.ans === null; }).length;
+    if (miss && !confirm('Ci sono ' + miss + ' domande senza risposta. Consegnare comunque?')) return;
+    finish();
+  }
+
+  function recordAnswer(it) {
+    if (it.recorded) return;
+    it.recorded = true;
+    var id = it.q.id;
+    if (it.ans === it.q.c) { if (store.err[id]) { store.err[id]--; if (!store.err[id]) delete store.err[id]; } }
+    else store.err[id] = (store.err[id] || 0) + 1;
+    save();
+  }
+
+  function finish() {
+    clearInterval(tick);
+    S.items.forEach(function (it) { if (it.ans !== null) recordAnswer(it); });
+    var n = S.items.length;
+    var ok = S.items.filter(function (x) { return x.ans === x.q.c; }).length;
+    var errs = n - ok;
+    $('score').textContent = ok + ' / ' + n;
+    $('scoreInfo').textContent = Math.round(ok / n * 100) + '% corrette · ' + errs + ' errori (incluse le non risposte)';
+    if (S.mode === 'esame') {
+      var pass = errs <= S.soglia;
+      $('esito').innerHTML = '<span class="' + (pass ? 'pass' : 'fail') + '" style="font-weight:700">' + (pass ? 'SUPERATO' : 'NON SUPERATO') + '</span> <span class="muted">(max ' + S.soglia + ' errori)</span>';
+    } else $('esito').textContent = '';
+    renderReview();
+    show('results');
+  }
+
+  function renderReview() {
+    var only = $('soloErr').checked;
+    var rows = S.items.map(function (it, k) {
+      var q = it.q, right = it.ans === q.c;
+      if (only && right) return '';
+      var ans = it.order.map(function (oi) {
+        if (oi === q.c) return '<div class="a ok">✔ ' + esc(q.o[oi]) + '</div>';
+        if (oi === it.ans) return '<div class="a ko">✘ ' + esc(q.o[oi]) + '</div>';
+        return '';
+      }).join('');
+      return '<div class="rev"><div class="q-id">' + (k + 1) + ' · ' + q.id + (it.ans === null ? ' · non risposta' : '') + '</div><div><b>' + esc(q.q) + '</b></div>' + ans + '</div>';
+    }).join('');
+    $('review').innerHTML = rows || '<p class="muted">Nessun errore, complimenti!</p>';
+  }
+  $('soloErr').onchange = renderReview;
+  $('again').onclick = function () { renderHome(); startQuiz(); };
+  $('home2').onclick = function () { renderHome(); show('home'); };
+
+  // ---------- sfoglia ----------
+  function openBrowse() { $('search').value = ''; renderBrowse(); show('browse'); }
+  function norm(s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function renderBrowse() {
+    var t = norm($('search').value.trim());
+    var list = D.filter(function (q) {
+      if (!t) return true;
+      return norm(q.id + ' ' + q.q + ' ' + q.o.join(' ')).indexOf(t) >= 0;
+    });
+    $('browseInfo').textContent = list.length + ' domande' + (list.length > 200 ? ' (mostrate le prime 200, usa la ricerca)' : '');
+    $('browseList').innerHTML = list.slice(0, 200).map(function (q) {
+      return '<div class="rev"><div class="q-id">' + q.id + '</div><div><b>' + esc(q.q) + '</b></div>' +
+        q.o.map(function (o, i) { return '<div class="a' + (i === q.c ? ' ok' : '') + '">' + (i === q.c ? '✔ ' : '· ') + esc(o) + '</div>'; }).join('') + '</div>';
+    }).join('') || '<p class="muted">Nessun risultato.</p>';
+  }
+  var deb;
+  $('search').addEventListener('input', function () { clearTimeout(deb); deb = setTimeout(renderBrowse, 150); });
+  $('home3').onclick = function () { renderHome(); show('home'); };
+
+  renderSections();
+  renderHome();
+})();
+</script>
+</body>
+</html>
