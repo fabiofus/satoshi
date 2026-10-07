@@ -36,8 +36,6 @@
   .mode { text-align: left; padding: 14px; }
   .mode b { display: block; margin-bottom: 4px; }
   .mode.active { border-color: var(--accent); background: var(--sel-bg); }
-  .sections { display: flex; flex-wrap: wrap; gap: 6px; }
-  .sections label { margin: 0; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: .9rem; cursor: pointer; }
   .q-id { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--muted); }
   .q-text { font-size: 1.1rem; font-weight: 600; margin: 6px 0 14px; }
   .opt { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px 14px; line-height: 1.4; }
@@ -86,11 +84,6 @@
       <div class="row" id="rowTempo"><label class="grow">Tempo (minuti, 0 = nessun limite)</label><input type="number" id="tempo" min="0" value="30"></div>
       <div class="row" id="rowSoglia"><label class="grow">Errori massimi per superare</label><input type="number" id="soglia" min="0" value="3"></div>
       <label><input type="checkbox" id="mescola" checked> Mescola l'ordine delle risposte</label>
-      <div style="margin-top:12px">
-        <div class="row"><span class="grow">Sezioni incluse</span>
-          <button id="selAll" type="button">Tutte</button><button id="selNone" type="button">Nessuna</button></div>
-        <div class="sections" id="sections" style="margin-top:8px"></div>
-      </div>
     </div>
 
     <div class="row"><button class="primary grow" id="start">Inizia</button></div>
@@ -178,26 +171,9 @@
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function show(id) { ['home', 'quiz', 'results', 'browse'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); }); window.scrollTo(0, 0); }
-  function sec(q) { return q.id.slice(0, 2); }
 
   // ---------- home ----------
   var mode = store.settings.mode || 'esame';
-  var sections = {};
-  D.forEach(function (q) { sections[sec(q)] = (sections[sec(q)] || 0) + 1; });
-  var secKeys = Object.keys(sections).sort();
-  var selSec = store.settings.sec || secKeys.slice();
-
-  function renderSections() {
-    $('sections').innerHTML = secKeys.map(function (k) {
-      return '<label><input type="checkbox" value="' + k + '"' + (selSec.indexOf(k) >= 0 ? ' checked' : '') + '> ' + k + ' <span class="muted">(' + sections[k] + ')</span></label>';
-    }).join('');
-  }
-  $('sections').addEventListener('change', function () {
-    selSec = [].slice.call($('sections').querySelectorAll('input:checked')).map(function (i) { return i.value; });
-  });
-  $('selAll').onclick = function () { selSec = secKeys.slice(); renderSections(); };
-  $('selNone').onclick = function () { selSec = []; renderSections(); };
-
   function errIds() { return Object.keys(store.err).filter(function (id) { return byId[id] && store.err[id] > 0; }); }
 
   function renderHome() {
@@ -230,7 +206,7 @@
 
   $('start').onclick = function () {
     store.settings = {
-      mode: mode, sec: selSec, nDom: +$('nDom').value || 30, tempo: Math.max(0, +$('tempo').value || 0),
+      mode: mode, nDom: +$('nDom').value || 30, tempo: Math.max(0, +$('tempo').value || 0),
       soglia: Math.max(0, +$('soglia').value || 0), mescola: $('mescola').checked
     };
     save();
@@ -242,9 +218,8 @@
     var cfg = store.settings;
     var pool = mode === 'errori'
       ? errIds().map(function (id) { return byId[id]; })
-      : D.filter(function (q) { return selSec.indexOf(sec(q)) >= 0; });
-    if (mode === 'errori') pool = pool.filter(function (q) { return selSec.indexOf(sec(q)) >= 0; });
-    if (!pool.length) { alert('Nessuna domanda disponibile con le sezioni selezionate.'); return; }
+      : D;
+    if (!pool.length) { alert('Nessuna domanda disponibile.'); return; }
     var qs = shuffle(pool.slice()).slice(0, Math.min(cfg.nDom, pool.length));
     S = {
       mode: mode,
@@ -397,7 +372,6 @@
   $('search').addEventListener('input', function () { clearTimeout(deb); deb = setTimeout(renderBrowse, 150); });
   $('home3').onclick = function () { renderHome(); show('home'); };
 
-  renderSections();
   renderHome();
 })();
 </script>
